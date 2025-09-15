@@ -1,5 +1,8 @@
+# requirements.txt
+
 streamlit
-torch
-transformers
+openai>=1.0.0
 PyPDF2
-huggingface_hub
+transformers
+torch
+sentencepiece
