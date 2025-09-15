@@ -1,214 +1,249 @@
+# myapp.py
+
 import streamlit as st
-import torch
-from transformers import pipeline
-from io import StringIO
+import openai
 from PyPDF2 import PdfReader
-import base64
+from transformers import pipeline
 
-# Constants
-IGNOU_LOGO_URL = "https://upload.wikimedia.org/wikipedia/en/thumb/3/3f/IGNOU_logo.svg/1200px-IGNOU_logo.svg.png"  
-GOOGLE_FORM_LINK = "https://forms.gle/YOUR_GOOGLE_FORM_LINK_HERE"  # Replace with your actual Google Form URL
+# ---------------------------
+# Page Configuration (sabse upar hona chahiye)
+# ---------------------------
+st.set_page_config(
+    page_title="IGNOU AI Tutor",
+    page_icon="🎓",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Cache HuggingFace pipeline loading for performance
-@st.cache_resource(show_spinner=False)
-def load_qa_pipeline():
-    return pipeline("question-answering", model="distilbert-base-uncased-distilled-squad")
+# ---------------------------
+# API Key and Client Setup
+# ---------------------------
+# IMPORTANT: Apni nayi OpenAI API key ko Streamlit Secrets mein save karein.
+# Key ka naam "OPENAI_API_KEY" hona chahiye.
+try:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+    client = openai.OpenAI()
+except (KeyError, FileNotFoundError):
+    st.error("OpenAI API key not found. Please add it to your Streamlit Secrets.")
+    st.stop()
 
-@st.cache_resource(show_spinner=False)
+# ---------------------------
+# Loading Models (Cached for performance)
+# ---------------------------
+@st.cache_resource(show_spinner="Loading summarizer model...")
 def load_summarizer_pipeline():
+    """Loads the summarization model from HuggingFace."""
     return pipeline("summarization", model="facebook/bart-large-cnn")
 
-qa_model = load_qa_pipeline()
 summarizer_model = load_summarizer_pipeline()
 
-# Helper functions
-def get_logo_markdown():
-    logo_md = f"""
-    <div style='text-align: center; margin-bottom: 1rem;'>
-        <img src="{IGNOU_LOGO_URL}" width="90" alt="IGNOU logo" />
-        <h2 style='margin-top: 0.5rem;'>Smart IGNOU Hackathon – AI Tutor App</h2>
-    </div>
-    """
-    return logo_md
+# ---------------------------
+# Helper Functions
+# ---------------------------
+def display_header():
+    """Displays the IGNOU logo and app title."""
+    st.markdown(
+        """
+        <div style='text-align: center;'>
+            <img src="https://upload.wikimedia.org/wikipedia/en/thumb/3/3f/IGNOU_logo.svg/1200px-IGNOU_logo.svg.png" width="90" alt="IGNOU logo">
+            <h2>Smart IGNOU Hackathon – AI Tutor App</h2>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-def render_home(student_data):
-    st.markdown(get_logo_markdown(), unsafe_allow_html=True)
+# ---------------------------
+# App Pages (Har page ke liye ek function)
+# ---------------------------
+
+def render_home():
+    """Displays the Home Page."""
+    display_header()
     st.write("### Welcome to AI Tutor App – Your personal learning assistant.")
-    st.write("""
+    st.write(
+        """
         This app supports IGNOU students with interactive AI-powered features:
-        - AI Chatbot for instant answers to your questions.
-        - Notes Summarizer to condense your study material.
-        - Interactive Quiz Section with Google Forms.
-        - Resources section with important PDFs.
-    """)
+        - **AI Chatbot**: Get instant answers to your study-related questions.
+        - **Notes Summarizer**: Condense your PDF or text study material into key points.
+        - **Quiz Section**: Test your knowledge with an interactive quiz.
+        - **Resources**: A place to keep links to important study materials.
+        """
+    )
     st.markdown("---")
-    st.write("### Student Dashboard")
 
-    if not student_data:
-        with st.form("student_info_form"):
-            student_name = st.text_input("Student Name")
-            enrollment_number = st.text_input("Enrollment Number")
-            college_name = st.text_input("College Name")
-            semester = st.selectbox("Semester", [str(i) for i in range(1, 11)])
-            submitted = st.form_submit_button("Save")
-            if submitted:
-                st.session_state["student_data"] = {
-                    "Student Name": student_name,
-                    "Enrollment Number": enrollment_number,
-                    "College Name": college_name,
-                    "Semester": semester,
-                }
-                st.success("Student details saved!")
-    else:
-        for label, value in student_data.items():
-            st.text(f"{label}: {value}")
+    # Student Dashboard Form
+    st.write("### Student Dashboard")
+    if "student_data" not in st.session_state:
+        st.session_state.student_data = {}
+
+    with st.form("student_info_form"):
+        st.write("Enter your details to get started:")
+        name = st.text_input("Student Name", st.session_state.student_data.get("Name", ""))
+        enrollment = st.text_input("Enrollment Number", st.session_state.student_data.get("Enrollment", ""))
+        college = st.text_input("College Name", st.session_state.student_data.get("College", ""))
+        submitted = st.form_submit_button("Save Details")
+
+        if submitted:
+            st.session_state.student_data = {
+                "Name": name,
+                "Enrollment": enrollment,
+                "College": college,
+            }
+            st.success("Details saved successfully!")
+    
+    if st.session_state.student_data:
+        st.write("#### Your Saved Details:")
+        st.json(st.session_state.student_data)
+
 
 def render_chat():
-    st.markdown(get_logo_markdown(), unsafe_allow_html=True)
+    """Displays the AI Chatbot Page."""
+    display_header()
     st.write("### AI Chatbot")
-    st.write("Type your question below and get AI-generated answers.")
+    st.info("Ask any question related to your studies or general topics.")
 
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+    # Initialize chat history in session state
+    if "messages" not in st.session_state:
+        st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I help you with your studies today?"}]
 
-    user_input = st.text_input("Your question:", key="user_question")
-    submit_button = st.button("Send")
+    # Display past messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    if submit_button and user_input.strip():
-        st.session_state.chat_history.append({"sender": "User", "message": user_input.strip()})
-        with st.spinner("Thinking..."):
-            try:
-                answer = qa_model(
-                    question=user_input.strip(),
-                    context="This is an AI tutor app helping IGNOU students with their questions."
-                )
-                ai_message = answer["answer"]
-            except Exception:
-                ai_message = "Sorry, I couldn't generate a response at this moment."
-        st.session_state.chat_history.append({"sender": "AI", "message": ai_message})
+    # Get user input
+    if prompt := st.chat_input("What is your question?"):
+        # Add user message to history and display
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-    for chat in st.session_state.chat_history:
-        if chat["sender"] == "User":
-            st.markdown(
-                f"<div style='background-color:#D6EAF8; text-align:right; padding: 8px; border-radius:10px; margin: 5px; max-width:80%; margin-left:auto;'>{chat['message']}</div>",
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                f"<div style='background-color:#EAECEE; text-align:left; padding: 8px; border-radius:10px; margin: 5px; max-width:80%; margin-right:auto;'>{chat['message']}</div>",
-                unsafe_allow_html=True
-            )
+        # Get AI response
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
+            with st.spinner("Thinking..."):
+                try:
+                    response = client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+                    )
+                    full_response = response.choices[0].message.content
+                except Exception as e:
+                    full_response = f"Error: Could not connect to OpenAI. {e}"
+            
+            message_placeholder.markdown(full_response)
+        
+        # Add AI response to history
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
+
 
 def render_notes_summarizer():
-    st.markdown(get_logo_markdown(), unsafe_allow_html=True)
+    """Displays the Notes Summarizer Page."""
+    display_header()
     st.write("### Notes Summarizer")
-    st.write("Upload a PDF or text file to get a concise summary.")
+    st.info("Upload a PDF or Text file to get a concise summary.")
 
-    uploaded_file = st.file_uploader("Upload file (PDF or TXT)", type=["pdf", "txt"])
+    uploaded_file = st.file_uploader("Upload your notes (PDF or TXT)", type=["pdf", "txt"])
 
     if uploaded_file:
-        text_content = ""
-        if uploaded_file.type == "application/pdf":
-            try:
+        try:
+            if uploaded_file.type == "application/pdf":
                 reader = PdfReader(uploaded_file)
-                for page in reader.pages:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text_content += page_text + "\n"
-            except Exception:
-                st.error("Unable to read the PDF file.")
-                return
-        else:
-            try:
+                text_content = "\n".join(page.extract_text() for page in reader.pages if page.extract_text())
+            else: # For .txt files
                 text_content = uploaded_file.getvalue().decode("utf-8")
-            except Exception:
-                st.error("Unable to read the text file.")
+            
+            if not text_content.strip():
+                st.warning("Could not extract text from the file. It might be empty or an image-based PDF.")
                 return
 
-        st.write("#### Preview of uploaded content (first 1000 characters):")
-        st.text(text_content[:1000] + ("..." if len(text_content) > 1000 else ""))
+            st.text_area("Extracted Text (First 1000 characters)", text_content[:1000], height=200)
 
-        if st.button("Summarize"):
-            with st.spinner("Generating summary..."):
-                try:
-                    max_input_chars = 1000
-                    chunks = [text_content[i:i + max_input_chars] for i in range(0, len(text_content), max_input_chars)]
-                    summaries = []
-                    for chunk in chunks:
-                        summary = summarizer_model(
-                            chunk, max_length=130, min_length=30, do_sample=False
-                        )[0]['summary_text']
-                        summaries.append(summary)
-                    full_summary = " ".join(summaries)
-                    st.markdown("### Summary:")
-                    st.write(full_summary)
-                except Exception:
-                    st.error("Error generating summary. Please try again with smaller file or simpler content.")
+            if st.button("Generate Summary"):
+                with st.spinner("Summarizing... This may take a moment."):
+                    try:
+                        summary = summarizer_model(text_content, max_length=150, min_length=40, do_sample=False)[0]['summary_text']
+                        st.subheader("Summary")
+                        st.success(summary)
+                    except Exception as e:
+                        st.error(f"An error occurred during summarization: {e}")
+
+        except Exception as e:
+            st.error(f"Failed to process the file: {e}")
+
 
 def render_quiz_section():
-    st.markdown(get_logo_markdown(), unsafe_allow_html=True)
+    """Displays the Quiz Section Page using a Google Form."""
+    display_header()
     st.write("### Quiz Section")
+    st.info("Test your knowledge by taking the quiz below.")
+    
+    # IMPORTANT: Replace this URL with your actual Google Form link
+    google_form_url = "https://forms.gle/YOUR_GOOGLE_FORM_LINK_HERE" 
+    
+    st.markdown(f'<iframe src="{google_form_url}" width="100%" height="600" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>', unsafe_allow_html=True)
 
-    iframe_code = f"""
-    <iframe src="{GOOGLE_FORM_LINK}" width="100%" height="600" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>
-    """
-    try:
-        st.markdown(iframe_code, unsafe_allow_html=True)
-    except:
-        if st.button("Open Quiz"):
-            js = f"window.open('{GOOGLE_FORM_LINK}')"
-            st.components.v1.html(f"<script>{js}</script>")
 
 def render_resources():
-    st.markdown(get_logo_markdown(), unsafe_allow_html=True)
-    st.write("### Resources")
+    """Displays the Resources Page."""
+    display_header()
+    st.write("### Important Resources")
+    st.info("You can save important links and notes here for quick access.")
 
-    book_pdfs = st.text_area("Book PDFs (enter URLs or descriptions)")
-    prev_year_pdfs = st.text_area("Previous Year Question PDFs (enter URLs or descriptions)")
-    prev_year = st.text_input("Year for Previous Year Questions")
+    if "resources" not in st.session_state:
+        st.session_state.resources = {
+            "Book PDFs URLs": "",
+            "Previous Year Papers URLs": ""
+        }
 
-    st.write("---")
-    st.write("You entered:")
-    st.write(f"**Book PDFs:** {book_pdfs}")
-    st.write(f"**Previous Year Question PDFs:** {prev_year_pdfs}")
-    st.write(f"**Year:** {prev_year}")
+    with st.form("resources_form"):
+        books = st.text_area("Book PDFs (Enter URLs, one per line)", st.session_state.resources["Book PDFs URLs"])
+        papers = st.text_area("Previous Year Question Papers (Enter URLs, one per line)", st.session_state.resources["Previous Year Papers URLs"])
+        
+        if st.form_submit_button("Save Resources"):
+            st.session_state.resources["Book PDFs URLs"] = books
+            st.session_state.resources["Previous Year Papers URLs"] = papers
+            st.success("Resources saved!")
 
+    st.write("#### Your Saved Resources:")
+    st.json(st.session_state.resources)
+
+
+# ---------------------------
+# Main App Logic (Sidebar and Page Navigation)
+# ---------------------------
 def main():
-    st.set_page_config(page_title="Smart IGNOU Hackathon – AI Tutor App", layout="wide", initial_sidebar_state="expanded")
+    with st.sidebar:
+        st.markdown(
+            """
+            <div style='text-align: center;'>
+                <img src="https://upload.wikimedia.org/wikipedia/en/thumb/3/3f/IGNOU_logo.svg/1200px-IGNOU_logo.svg.png" width="70" alt="IGNOU logo">
+                <h4>IGNOU AI Tutor</h4>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        st.markdown("---")
+        
+        page_selection = st.radio(
+            "Navigate",
+            ["Home", "AI Chatbot", "Notes Summarizer", "Quiz Section", "Resources"]
+        )
+        st.markdown("---")
+        st.info("Built for the Smart IGNOU Hackathon.")
 
+    # Dictionary to map selections to functions
     pages = {
         "Home": render_home,
         "AI Chatbot": render_chat,
         "Notes Summarizer": render_notes_summarizer,
         "Quiz Section": render_quiz_section,
-        "Resources": render_resources,
+        "Resources": render_resources
     }
-
-    if "selected_page" not in st.session_state:
-        st.session_state.selected_page = "Home"
-    if "student_data" not in st.session_state:
-        st.session_state.student_data = None
-
-    with st.sidebar:
-        st.markdown(get_logo_markdown(), unsafe_allow_html=True)
-        selection = st.radio("Navigate", list(pages.keys()), index=list(pages.keys()).index(st.session_state.selected_page))
-        st.session_state.selected_page = selection
-
-    if st.session_state.selected_page == "Home":
-        pages["Home"](st.session_state.student_data)
-    else:
-        pages[st.session_state.selected_page]()
-
-    if st.session_state.selected_page == "Home":
-        with st.expander("Deployment Instructions (Streamlit Cloud)"):
-            st.markdown("""
-            1. Save this script as `app.py`.
-            2. Push to a GitHub repository.
-            3. Go to [Streamlit Cloud](https://streamlit.io/cloud) and sign in.
-            4. Click 'New app', connect your repo, choose branch and `app.py`.
-            5. Deploy your app for free.
-            6. Share your app URL.
-            """)
+    
+    # Run the function corresponding to the selection
+    pages[page_selection]()
 
 if __name__ == "__main__":
     main()
