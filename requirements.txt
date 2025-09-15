@@ -1,0 +1,5 @@
+streamlit
+torch
+transformers
+PyPDF2
+huggingface_hub
