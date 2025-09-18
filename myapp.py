@@ -1,7 +1,6 @@
 # myapp.py
 
 import streamlit as st
-# CHANGE: Gemini ki library import karein
 import google.generativeai as genai
 from PyPDF2 import PdfReader
 from transformers import pipeline
@@ -19,7 +18,6 @@ st.set_page_config(
 # ---------------------------
 # API Key and Client Setup
 # ---------------------------
-# CHANGE: OpenAI ke bajaye Gemini API key setup karein
 try:
     # Apni Gemini API key ko Streamlit Secrets mein save karein.
     # Key ka naam "GEMINI_API_KEY" hona chahiye.
@@ -28,22 +26,21 @@ except (KeyError, FileNotFoundError):
     st.error("Gemini API key nahi mili. Kripya ise apne Streamlit Secrets mein 'GEMINI_API_KEY' naam se add karein.")
     st.stop()
 
-# CHANGE: Gemini Model ko load karein (ek baar)
-@st.cache_resource
-def load_gemini_model():
-    return genai.GenerativeModel('gemini-1.5-flash-latest')
-
-model = load_gemini_model()
-
-
 # ---------------------------
 # Loading Models (Cached for performance)
 # ---------------------------
+@st.cache_resource
+def load_gemini_model():
+    """Loads the Gemini model."""
+    return genai.GenerativeModel('gemini-1.5-flash-latest')
+
 @st.cache_resource(show_spinner="Loading summarizer model...")
 def load_summarizer_pipeline():
     """Loads the summarization model from HuggingFace."""
     return pipeline("summarization", model="facebook/bart-large-cnn")
 
+# Load the models
+model = load_gemini_model()
 summarizer_model = load_summarizer_pipeline()
 
 # ---------------------------
@@ -72,10 +69,10 @@ def render_home():
     st.write(
         """
         This app supports IGNOU students with interactive AI-powered features:
-        - *AI Chatbot*: Get instant answers to your study-related questions.
-        - *Notes Summarizer*: Condense your PDF or text study material into key points.
-        - *Quiz Section*: Test your knowledge with an interactive quiz.
-        - *Resources*: A place to keep links to important study materials.
+        - **AI Chatbot**: Get instant answers to your study-related questions.
+        - **Notes Summarizer**: Condense your PDF or text study material into key points.
+        - **Quiz Section**: Test your knowledge with an interactive quiz.
+        - **Resources**: A place to keep links to important study materials.
         """
     )
     st.markdown("---")
@@ -105,7 +102,6 @@ def render_home():
         st.json(st.session_state.student_data)
 
 
-# CHANGE: Gemini API ke liye render_chat function ko poora update kiya gaya hai
 def render_chat():
     """Displays the AI Chatbot Page using Gemini API."""
     display_header()
@@ -114,32 +110,32 @@ def render_chat():
 
     # Initialize chat history in session state for Gemini
     if "chat_session" not in st.session_state:
-        # model.start_chat() ek conversation object banata hai jo history ko yaad rakhta hai
         st.session_state.chat_session = model.start_chat(history=[])
 
-    # Display past messages from the chat session history
-    # Shuruaati message display karein
-    with st.chat_message("assistant"):
-        st.markdown("Hello! How can I help you with your studies today?")
+    # --- SUDHAR KIYA GAYA CODE ---
+    # Shuruaati message sirf tab dikhayein jab chat history khali ho
+    if not st.session_state.chat_session.history:
+        with st.chat_message("assistant"):
+            st.markdown("Hello! How can I help you with your studies today?")
 
+    # Purane messages ko history se display karein
     for message in st.session_state.chat_session.history:
-        # Gemini API 'model' role ka upyog karta hai, hum UI mein 'assistant' dikhayenge
         role = "assistant" if message.role == "model" else message.role
         with st.chat_message(role):
             st.markdown(message.parts[0].text)
+    # --- SUDHAR KHATAM ---
 
-    # Get user input
+    # User ka input lein
     if prompt := st.chat_input("What is your question?"):
-        # Display user message
+        # User ka message display karein
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Get AI response from Gemini
+        # Gemini se response prapt karein
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             with st.spinner("Thinking..."):
                 try:
-                    # send_message ka upyog karke Gemini ko prompt bhejein
                     response = st.session_state.chat_session.send_message(prompt)
                     full_response = response.text
                 except Exception as e:
@@ -188,7 +184,7 @@ def render_quiz_section():
     st.write("### Quiz Section")
     st.info("Test your knowledge by taking the quiz below.")
     
-    # IMPORTANT: Replace this URL with your actual Google Form link
+    # IMPORTANT: Apne Google Form ka asli link yahan daalein
     google_form_url = "https://forms.gle/YOUR_GOOGLE_FORM_LINK_HERE" 
     
     st.markdown(f'<iframe src="{google_form_url}" width="100%" height="600" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>', unsafe_allow_html=True)
@@ -251,8 +247,10 @@ def main():
         "Resources": render_resources
     }
     
-    # Run the function corresponding to the selection
+    # Chune gaye page ke function ko run karein
     pages[page_selection]()
 
-if _name_ == "_main_":
+# --- SAHI KIYA GAYA CODE ---
+# Script ko run karne ke liye sahi entry point
+if __name__ == "__main__":
     main()
