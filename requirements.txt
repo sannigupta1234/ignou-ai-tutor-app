@@ -1,8 +1,8 @@
 # requirements.txt
 
 streamlit
-openai>=1.0.0
 PyPDF2
 transformers
 torch
 sentencepiece
+google-generativeai
