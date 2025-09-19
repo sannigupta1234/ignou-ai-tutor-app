@@ -54,7 +54,7 @@ def display_header():
     st.markdown(
         """
         <div style='text-align: center;'>
-            <img src="{LOGO_UR}" width="100" alt="IGNOU logo">
+            <img src="{LOGO_UR}" width="100" alt>
             <h2>Smart IGNOU Hackathon – AI Tutor App</h2>
         </div>
         """,
@@ -257,6 +257,7 @@ def main():
 # Script ko run karne ke liye sahi entry point
 if __name__ == "__main__":
     main()
+
 
 
 
