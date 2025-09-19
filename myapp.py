@@ -4,6 +4,8 @@ import streamlit as st
 import google.generativeai as genai
 from PyPDF2 import PdfReader
 from transformers import pipeline
+LOGO_URL = "https://upload.wikimedia.org/wikipedia/en/thumb/3/3f/IGNOU_logo.svg/1200px-IGNOU_logo.svg.png" # <--- Yahan apna actual image URL daalein
+
 
 # ---------------------------
 # Page Configuration (sabse upar hona chahiye)
@@ -48,12 +50,11 @@ summarizer_model = load_summarizer_pipeline()
 # ---------------------------
 def display_header():
     """Displays the IGNOU logo and app title."""
-        NEW_IGNOU_LOGO_URL = "https://upload.wikimedia.org/wikipedia/en/thumb/3/3f/IGNOU_logo.svg/1200px-IGNOU_logo.svg.png" # <--- REPLACE THIS WITH YOUR ACTUAL DIRECT IMAGE URL
 
     st.markdown(
         """
         <div style='text-align: center;'>
-             <img src="{NEW_IGNOU_LOGO_URL}" width="100" alt="IGNOU logo">
+            <img src="{LOGO_UR}" width="100" alt="IGNOU logo">
             <h2>Smart IGNOU Hackathon – AI Tutor App</h2>
         </div>
         """,
@@ -256,4 +257,5 @@ def main():
 # Script ko run karne ke liye sahi entry point
 if __name__ == "__main__":
     main()
+
 
