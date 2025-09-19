@@ -4,7 +4,7 @@ import streamlit as st
 import google.generativeai as genai
 from PyPDF2 import PdfReader
 from transformers import pipeline
-LOGO_URL = "https://upload.wikimedia.org/wikipedia/en/thumb/3/3f/IGNOU_logo.svg/1200px-IGNOU_logo.svg.png" # <--- Yahan apna actual image URL daalein
+LOGO_URL = "https://seeklogo.com/images/I/ignou-logo-03593C2B9B-seeklogo.com.png" # <--- Yahan apna actual image URL daalein
 
 
 # ---------------------------
@@ -257,5 +257,6 @@ def main():
 # Script ko run karne ke liye sahi entry point
 if __name__ == "__main__":
     main()
+
 
 
